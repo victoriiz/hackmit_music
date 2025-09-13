@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Suno AI Music Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn { from { opacity:0; transform:translateY(20px);} to {opacity:1; transform:translateY(0);} }
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    .glass-effect {
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .btn-hover:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+
+  <!-- Header -->
+  <div class="text-center py-8">
+    <h1 class="text-4xl font-bold text-white mb-2 flex items-center justify-center gap-2">
+      <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13"/>
+      </svg>
+      Suno AI Music Generator
+    </h1>
+    <p class="text-blue-200">Generate music from text using Suno AI</p>
+  </div>
+
+  <div class="max-w-4xl mx-auto px-6">
+
+    <!-- Form -->
+    <div class="glass-effect rounded-2xl p-6 mb-6">
+      <form id="musicForm" class="space-y-6">
+        <div>
+          <label class="block text-white font-medium mb-2">Music Description *</label>
+          <textarea id="prompt" rows="3" placeholder="Describe the music you want..."
+            class="w-full p-3 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:border-blue-400 focus:outline-none resize-none"
+            required></textarea>
+        </div>
+        <button type="submit" id="generateBtn"
+          class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 px-6 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 flex items-center justify-center gap-2 btn-hover transition-all duration-200 text-lg">
+          🎵 Generate Music
+        </button>
+      </form>
+    </div>
+
+    <!-- Status -->
+    <div id="statusSection" class="glass-effect rounded-2xl p-6 mb-6 hidden">
+      <p class="text-white font-medium">⏳ Generating your music... Please wait</p>
+      <div class="w-full bg-white/20 rounded-full h-2 mt-2">
+        <div id="progressBar" class="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="musicSection" class="glass-effect rounded-2xl p-6 mb-6 hidden">
+      <h2 class="text-2xl font-bold text-white mb-4 flex items-center gap-2">🎧 Your Generated Music</h2>
+      <div id="musicResults" class="space-y-6"></div>
+    </div>
+
+    <!-- Errors -->
+    <div id="errorSection" class="glass-effect rounded-2xl p-6 mb-6 border-red-500/30 bg-red-500/10 hidden">
+      <p id="errorText" class="text-red-300"></p>
+    </div>
+
+  </div>
+
+  <script>
+    const API_BASE_URL = "http://localhost:3000/api/suno";
+    let generatedTracks = JSON.parse(localStorage.getItem("generatedTracks") || "[]");
+    let isGenerating = false;
+
+    const els = {
+      form: document.getElementById("musicForm"),
+      prompt: document.getElementById("prompt"),
+      generateBtn: document.getElementById("generateBtn"),
+      statusSection: document.getElementById("statusSection"),
+      progressBar: document.getElementById("progressBar"),
+      musicSection: document.getElementById("musicSection"),
+      musicResults: document.getElementById("musicResults"),
+      errorSection: document.getElementById("errorSection"),
+      errorText: document.getElementById("errorText")
+    };
+
+    els.form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (isGenerating) return;
+      const prompt = els.prompt.value.trim();
+      if (!prompt) return showError("Please enter a music description.");
+      hideError();
+      await generateMusic(prompt);
+    });
+
+    function showError(msg) {
+      els.errorText.textContent = msg;
+      els.errorSection.classList.remove("hidden");
+    }
+    function hideError() { els.errorSection.classList.add("hidden"); }
+    function showStatus() { els.statusSection.classList.remove("hidden"); }
+    function hideStatus() { els.statusSection.classList.add("hidden"); }
+    function updateProgress(p) { els.progressBar.style.width = p + "%"; }
+
+    async function generateMusic(prompt) {
+      isGenerating = true;
+      els.generateBtn.disabled = true;
+      els.generateBtn.textContent = "Generating...";
+      showStatus(); updateProgress(10);
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/generate`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || "Generation failed");
+
+        pollStatus(data.taskId, prompt);
+      } catch (err) {
+        showError("Failed: " + err.message);
+        hideStatus();
+        resetBtn();
+        isGenerating = false;
+      }
+    }
+
+    function pollStatus(taskId, prompt) {
+      let attempts = 0;
+      const int = setInterval(async () => {
+        attempts++;
+        updateProgress(20 + attempts);
+        try {
+          const res = await fetch(`${API_BASE_URL}/status?taskId=${encodeURIComponent(taskId)}`);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Status failed");
+          const status = data?.data?.status;
+
+          if (status === "SUCCESS") {
+            clearInterval(int); hideStatus(); resetBtn(); isGenerating = false;
+            const track = data.data.response?.data?.[0];
+            if (!track?.audio_url) throw new Error("No audio URL");
+            const trackData = {
+              id: taskId, prompt,
+              title: track.title || "Generated Music",
+              audioUrl: track.audio_url,
+              createdAt: new Date().toISOString()
+            };
+            generatedTracks.unshift(trackData);
+            addTrack(trackData);
+            saveTracks();
+          }
+          if (status === "FAILED") { clearInterval(int); throw new Error("Generation failed"); }
+          if (attempts > 60) { clearInterval(int); throw new Error("Timeout"); }
+        } catch (err) {
+          clearInterval(int);
+          showError("Error: " + err.message);
+          hideStatus(); resetBtn(); isGenerating = false;
+        }
+      }, 5000);
+    }
+
+    function resetBtn() {
+      els.generateBtn.disabled = false;
+      els.generateBtn.textContent = "🎵 Generate Music";
+    }
+
+    function addTrack(track) {
+      els.musicSection.classList.remove("hidden");
+      const el = document.createElement("div");
+      el.className = "glass-effect rounded-xl p-4 fade-in flex flex-col gap-3";
+
+      el.innerHTML = `
+        <div class="flex items-center gap-3">
+          <div class="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center text-white text-xl">🎶</div>
+          <div class="flex-1">
+            <h3 class="text-white font-semibold text-lg">${track.title}</h3>
+            <p class="text-white/70 text-sm">${track.prompt}</p>
+          </div>
+        </div>
+        <audio controls class="w-full mt-2">
+          <source src="${track.audioUrl}" type="audio/mpeg"/>
+          Your browser does not support audio.
+        </audio>
+        <button onclick="downloadTrack('${track.audioUrl}','${track.title}')"
+          class="w-fit px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg btn-hover">⬇ Download MP4</button>
+      `;
+      els.musicResults.prepend(el);
+    }
+
+    async function downloadTrack(url, title) {
+      try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const dl = document.createElement("a");
+        dl.href = URL.createObjectURL(blob);
+        dl.download = `${title.replace(/[^a-z0-9]/gi,'_')}.mp4`;  // force .mp4
+        document.body.appendChild(dl);
+        dl.click();
+        document.body.removeChild(dl);
+      } catch (err) {
+        showError("Download failed: " + err.message);
+      }
+    }
+
+    function saveTracks() {
+      localStorage.setItem("generatedTracks", JSON.stringify(generatedTracks.slice(0,20)));
+    }
+  </script>
+</body>
+</html>
