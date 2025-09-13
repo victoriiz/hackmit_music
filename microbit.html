@@ -9,22 +9,23 @@
 <h2>Micro:bit Rhythm Game</h2>
 <button id="connectBtn">Connect Micro:bit via USB</button>
 <input type="file" id="audioUpload" accept="audio/*">
+<label>BPM: <input type="number" id="bpmInput" value="120"></label>
 <p>Score: <span id="scoreDisplay">0</span></p>
-<audio id="song" controls></audio>
 
 <script>
 let port, reader;
-let activeNotes = [];
+let notes = [];
 let score = 0;
 
-// Beat detection
-let beatTimes = [];
-let beatIndex = 0;
-
-// Web Audio setup
+// Web Audio
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-let audioBuffer = null;
 let source = null;
+
+// Beat sync
+let bpm = 120;
+let secondsPerBeat = 0.5;
+let nextBeatTime = 0;
+let noteTravelTime = 2; // seconds for note to fall from top to hit line
 
 // p5.js setup
 function setup() {
@@ -32,30 +33,35 @@ function setup() {
   textSize(20);
 }
 
-// Draw loop
 function draw() {
   background(30);
 
-  if (source && beatTimes.length > 0) {
+  if (source) {
     const currentTime = audioCtx.currentTime - source.startTime;
 
-    // Spawn notes on precomputed beats
-    while (beatIndex < beatTimes.length && currentTime >= beatTimes[beatIndex]) {
+    // Spawn note if it's time for next beat
+    if (currentTime >= nextBeatTime) {
+      nextBeatTime += secondsPerBeat;
+
+      // Random left/right note
       const type = Math.random() < 0.5 ? "left" : "right";
       const x = type === "left" ? random(100, 250) : random(350, 500);
-      activeNotes.push({x: x, y: 0, type: type});
-      beatIndex++;
+      // Calculate starting y so it reaches hit line at exact beat
+      const y = 0;
+      const speed = (height - 50) / noteTravelTime;
+      notes.push({x, y, type, speed});
     }
   }
 
-  // Draw notes
-  for (let i = activeNotes.length-1; i >=0; i--) {
-    activeNotes[i].y += 3;
-    fill(activeNotes[i].type === "left" ? "blue" : "green");
-    ellipse(activeNotes[i].x, activeNotes[i].y, 30, 30);
+  // Draw and move notes
+  for (let i = notes.length-1; i >= 0; i--) {
+    notes[i].y += notes[i].speed * (deltaTime / 1000);
 
-    if (activeNotes[i].y > height-50) {
-      activeNotes.splice(i,1);
+    fill(notes[i].type === "left" ? "blue" : "green");
+    ellipse(notes[i].x, notes[i].y, 30, 30);
+
+    if (notes[i].y > height) {
+      notes.splice(i,1); // remove missed note
     }
   }
 
@@ -73,7 +79,6 @@ document.getElementById("connectBtn").onclick = async () => {
   try {
     port = await navigator.serial.requestPort();
     await port.open({ baudRate: 115200 });
-
     const decoder = new TextDecoderStream();
     port.readable.pipeTo(decoder.writable);
     reader = decoder.readable.getReader();
@@ -92,74 +97,42 @@ async function readLoop() {
 }
 
 function handleInput(input) {
-  if (input === "A") {
-    for (let i = activeNotes.length-1; i >=0; i--) {
-      if (activeNotes[i].type === "left" && abs(activeNotes[i].y - (height-50)) < 30) {
-        score += 100;
-        activeNotes.splice(i,1);
-        break;
-      }
+  for (let i = notes.length-1; i >=0; i--) {
+    if (input === "A" && notes[i].type === "left" && abs(notes[i].y - (height-50)) < 30) {
+      score += 100;
+      notes.splice(i,1);
+      break;
     }
-  }
-  if (input === "B") {
-    for (let i = activeNotes.length-1; i >=0; i--) {
-      if (activeNotes[i].type === "right" && abs(activeNotes[i].y - (height-50)) < 30) {
-        score += 100;
-        activeNotes.splice(i,1);
-        break;
-      }
+    if (input === "B" && notes[i].type === "right" && abs(notes[i].y - (height-50)) < 30) {
+      score += 100;
+      notes.splice(i,1);
+      break;
     }
   }
 }
 
-// --- Audio file upload & preprocessing ---
+// --- File upload ---
 const fileInput = document.getElementById("audioUpload");
 fileInput.addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) return;
 
   const arrayBuffer = await file.arrayBuffer();
-  audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-  // Run beat detection preprocessing
-  beatTimes = detectBeats(audioBuffer);
-  beatIndex = 0;
-
-  // Play audio
   if (source) source.disconnect();
   source = audioCtx.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(audioCtx.destination);
   source.start();
-  source.startTime = audioCtx.currentTime; // custom property for timing
+  source.startTime = audioCtx.currentTime;
+
+  // Initialize beat timing
+  bpm = parseFloat(document.getElementById("bpmInput").value);
+  secondsPerBeat = 60 / bpm;
+  nextBeatTime = 0;
+  notes = [];
 });
-
-// --- Simple beat detection function ---
-function detectBeats(buffer) {
-  const channelData = buffer.getChannelData(0); // mono
-  const sampleRate = buffer.sampleRate;
-  const frameSize = 1024;
-  const hopSize = 512;
-  const energies = [];
-
-  // Calculate short-time energy
-  for (let i = 0; i < channelData.length - frameSize; i += hopSize) {
-    let sum = 0;
-    for (let j = 0; j < frameSize; j++) {
-      sum += channelData[i+j] * channelData[i+j];
-    }
-    energies.push(sum);
-  }
-
-  // Detect peaks in energy
-  const beatTimes = [];
-  for (let i = 1; i < energies.length-1; i++) {
-    if (energies[i] > energies[i-1] && energies[i] > energies[i+1] && energies[i] > 0.001) {
-      beatTimes.push(i * hopSize / sampleRate);
-    }
-  }
-  return beatTimes;
-}
 </script>
 </body>
 </html>
