@@ -6,61 +6,87 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
 </head>
 <body>
+<h2>Micro:bit Rhythm Game</h2>
 <button id="connectBtn">Connect Micro:bit via USB</button>
+<input type="file" id="audioUpload" accept="audio/*">
+<p>Score: <span id="scoreDisplay">0</span></p>
+<audio id="song" controls></audio>
 
 <script>
-let port;
-let reader;
-let notes = [];
+let port, reader;
+let activeNotes = [];
 let score = 0;
 
+// Web Audio API setup
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let source = null;
+const analyser = audioCtx.createAnalyser();
+analyser.fftSize = 1024;
+const bufferLength = analyser.frequencyBinCount;
+const dataArray = new Uint8Array(bufferLength);
+
+// Beat detection parameters
+let lastEnergy = 0;
+const threshold = 200;
+
+// --- p5.js canvas ---
 function setup() {
   createCanvas(600, 400);
   textSize(20);
 }
 
+// --- Draw loop ---
 function draw() {
   background(30);
 
-  // Draw falling notes
-  for (let i = notes.length-1; i >= 0; i--) {
-    notes[i].y += 3;
-    fill(notes[i].type === "left" ? "blue" : "green");
-    ellipse(notes[i].x, notes[i].y, 30, 30);
+  // Beat detection
+  if (source) {
+    analyser.getByteFrequencyData(dataArray);
+    let energy = dataArray.reduce((a,b)=>a+b,0)/dataArray.length;
+    if (energy - lastEnergy > threshold) {
+      // Random left/right note
+      const type = Math.random() < 0.5 ? "left" : "right";
+      const x = type === "left" ? random(100, 250) : random(350, 500);
+      activeNotes.push({x: x, y: 0, type: type});
+    }
+    lastEnergy = energy;
+  }
 
-    // Remove notes past hit line
-    if (notes[i].y > height-50) {
-      notes.splice(i, 1);
+  // Draw notes
+  for (let i = activeNotes.length-1; i >=0; i--) {
+    activeNotes[i].y += 3;
+    fill(activeNotes[i].type === "left" ? "blue" : "green");
+    ellipse(activeNotes[i].x, activeNotes[i].y, 30, 30);
+
+    if (activeNotes[i].y > height-50) {
+      activeNotes.splice(i,1); // missed note
     }
   }
 
-  // Draw hit line
+  // Hit line
   stroke(255,0,0);
-  line(0, height-50, width, height-50);
+  line(0,height-50,width,height-50);
 
-  // Display score
   fill(255);
   text("Score: " + score, 20, 30);
+  document.getElementById("scoreDisplay").innerText = score;
 }
 
-// --- Connect to Micro:bit via USB ---
+// --- Micro:bit USB connection ---
 document.getElementById("connectBtn").onclick = async () => {
   try {
     port = await navigator.serial.requestPort();
     await port.open({ baudRate: 115200 });
 
     const decoder = new TextDecoderStream();
-    const inputDone = port.readable.pipeTo(decoder.writable);
-    const inputStream = decoder.readable;
-
-    reader = inputStream.getReader();
+    port.readable.pipeTo(decoder.writable);
+    reader = decoder.readable.getReader();
     readLoop();
-  } catch (error) {
-    console.error("Serial connection failed:", error);
+  } catch (err) {
+    console.error("Serial error:", err);
   }
 };
 
-// --- Read serial data ---
 async function readLoop() {
   while (true) {
     const { value, done } = await reader.read();
@@ -70,37 +96,43 @@ async function readLoop() {
 }
 
 function handleInput(input) {
-  console.log("Micro:bit input:", input);
-
   if (input === "A") {
-    // Check for left note
-    for (let i = notes.length-1; i >= 0; i--) {
-      if (notes[i].type === "left" && abs(notes[i].y - (height-50)) < 30) {
+    for (let i = activeNotes.length-1; i >=0; i--) {
+      if (activeNotes[i].type === "left" && abs(activeNotes[i].y - (height-50)) < 30) {
         score += 100;
-        notes.splice(i, 1);
+        activeNotes.splice(i,1);
         break;
       }
     }
   }
-
   if (input === "B") {
-    // Check for right note
-    for (let i = notes.length-1; i >= 0; i--) {
-      if (notes[i].type === "right" && abs(notes[i].y - (height-50)) < 30) {
+    for (let i = activeNotes.length-1; i >=0; i--) {
+      if (activeNotes[i].type === "right" && abs(activeNotes[i].y - (height-50)) < 30) {
         score += 100;
-        notes.splice(i, 1);
+        activeNotes.splice(i,1);
         break;
       }
     }
   }
 }
 
-// --- Spawn random notes (demo) ---
-setInterval(() => {
-  const type = Math.random() < 0.5 ? "left" : "right";
-  const x = type === "left" ? random(100, 250) : random(350, 500);
-  notes.push({x: x, y: 0, type: type});
-}, 800);
+// --- Handle audio file upload ---
+const fileInput = document.getElementById("audioUpload");
+fileInput.addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+  if (source) source.disconnect();
+  source = audioCtx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(analyser);
+  analyser.connect(audioCtx.destination);
+  source.start();
+  lastEnergy = 0;
+});
 </script>
 </body>
 </html>
