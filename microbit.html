@@ -25,6 +25,7 @@ function draw() {
   // Draw falling notes
   for (let i = notes.length-1; i >= 0; i--) {
     notes[i].y += 3;
+    fill(notes[i].type === "left" ? "blue" : "green");
     ellipse(notes[i].x, notes[i].y, 30, 30);
 
     // Remove notes past hit line
@@ -70,10 +71,22 @@ async function readLoop() {
 
 function handleInput(input) {
   console.log("Micro:bit input:", input);
-  if (input === "A" || input === "B") {
-    // Check if a note is near the hit line
+
+  if (input === "A") {
+    // Check for left note
     for (let i = notes.length-1; i >= 0; i--) {
-      if (abs(notes[i].y - (height-50)) < 30) {
+      if (notes[i].type === "left" && abs(notes[i].y - (height-50)) < 30) {
+        score += 100;
+        notes.splice(i, 1);
+        break;
+      }
+    }
+  }
+
+  if (input === "B") {
+    // Check for right note
+    for (let i = notes.length-1; i >= 0; i--) {
+      if (notes[i].type === "right" && abs(notes[i].y - (height-50)) < 30) {
         score += 100;
         notes.splice(i, 1);
         break;
@@ -82,11 +95,11 @@ function handleInput(input) {
   }
 }
 
-// --- Spawn random notes (demo purposes) ---
-// hi :) 
-
+// --- Spawn random notes (demo) ---
 setInterval(() => {
-  notes.push({x: random(100, 500), y: 0});
+  const type = Math.random() < 0.5 ? "left" : "right";
+  const x = type === "left" ? random(100, 250) : random(350, 500);
+  notes.push({x: x, y: 0, type: type});
 }, 800);
 </script>
 </body>
