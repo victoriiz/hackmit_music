@@ -16,6 +16,8 @@
 let port, reader;
 let notes = [];
 let score = 0;
+let beatData = null;
+let beatIndex = 0;
 
 // Web Audio
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -39,18 +41,21 @@ function draw() {
   if (source) {
     const currentTime = audioCtx.currentTime - source.startTime;
 
-    // Spawn notes on beat
-    if (currentTime >= nextBeatTime) {
-      nextBeatTime += secondsPerBeat;
+  // 🔹 Spawn notes from JSON
+  while (
+    beatData &&
+    beatIndex < beatData.notes.length &&
+    currentTime >= beatData.notes[beatIndex].time
+  ) {
+    const beat = beatData.notes[beatIndex];
+    const x = beat.type === "left" ? random(100, 250) : random(350, 500);
+    const speed = (height - 50) / noteTravelTime;
+    notes.push({ x, y: 0, type: beat.type, speed });
 
-      // Random left/right note
-      const type = Math.random() < 0.5 ? "left" : "right";
-      const x = type === "left" ? random(100, 250) : random(350, 500);
-      const y = 0;
-      const speed = (height - 50) / noteTravelTime;
-      notes.push({x, y, type, speed});
-    }
+    beatIndex++;
   }
+
+}
 
   // Draw and move notes
   for (let i = notes.length-1; i >= 0; i--) {
@@ -122,9 +127,18 @@ fileInput.addEventListener("change", async (event) => {
   // Estimate BPM from audio
   bpm = estimateBPM(audioBuffer);
   secondsPerBeat = 60 / bpm;
-  nextBeatTime = 0;
-  notes = [];
   document.getElementById("bpmDisplay").innerText = Math.round(bpm);
+
+  // 🔹 Generate beatData JSON
+  beatData = { notes: [] };
+  for (let t = 0; t < audioBuffer.duration; t += secondsPerBeat) {
+    beatData.notes.push({
+      time: t,
+      type: Math.random() < 0.5 ? "left" : "right"
+    });
+  }
+  beatIndex = 0;
+  notes = [];
 
   // Play audio
   if (source) source.disconnect();
