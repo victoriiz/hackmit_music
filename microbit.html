@@ -6,14 +6,28 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
 </head>
 <body>
+<h2>Micro:bit Rhythm Game</h2>
 <button id="connectBtn">Connect Micro:bit via USB</button>
+<input type="file" id="audioUpload" accept="audio/*">
+<label>BPM: <input type="number" id="bpmInput" value="120"></label>
+<p>Score: <span id="scoreDisplay">0</span></p>
 
 <script>
-let port;
-let reader;
+let port, reader;
 let notes = [];
 let score = 0;
 
+// Web Audio
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let source = null;
+
+// Beat sync
+let bpm = 120;
+let secondsPerBeat = 0.5;
+let nextBeatTime = 0;
+let noteTravelTime = 2; // seconds for note to fall from top to hit line
+
+// p5.js setup
 function setup() {
   createCanvas(600, 400);
   textSize(20);
@@ -22,44 +36,58 @@ function setup() {
 function draw() {
   background(30);
 
-  // Draw falling notes
-  for (let i = notes.length-1; i >= 0; i--) {
-    notes[i].y += 3;
-    ellipse(notes[i].x, notes[i].y, 30, 30);
+  if (source) {
+    const currentTime = audioCtx.currentTime - source.startTime;
 
-    // Remove notes past hit line
-    if (notes[i].y > height-50) {
-      notes.splice(i, 1);
+    // Spawn note if it's time for next beat
+    if (currentTime >= nextBeatTime) {
+      nextBeatTime += secondsPerBeat;
+
+      // Random left/right note
+      const type = Math.random() < 0.5 ? "left" : "right";
+      const x = type === "left" ? random(100, 250) : random(350, 500);
+      // Calculate starting y so it reaches hit line at exact beat
+      const y = 0;
+      const speed = (height - 50) / noteTravelTime;
+      notes.push({x, y, type, speed});
     }
   }
 
-  // Draw hit line
-  stroke(255,0,0);
-  line(0, height-50, width, height-50);
+  // Draw and move notes
+  for (let i = notes.length-1; i >= 0; i--) {
+    notes[i].y += notes[i].speed * (deltaTime / 1000);
 
-  // Display score
+    fill(notes[i].type === "left" ? "blue" : "green");
+    ellipse(notes[i].x, notes[i].y, 30, 30);
+
+    if (notes[i].y > height) {
+      notes.splice(i,1); // remove missed note
+    }
+  }
+
+  // Hit line
+  stroke(255,0,0);
+  line(0,height-50,width,height-50);
+
   fill(255);
   text("Score: " + score, 20, 30);
+  document.getElementById("scoreDisplay").innerText = score;
 }
 
-// --- Connect to Micro:bit via USB ---
+// --- Micro:bit USB connection ---
 document.getElementById("connectBtn").onclick = async () => {
   try {
     port = await navigator.serial.requestPort();
     await port.open({ baudRate: 115200 });
-
     const decoder = new TextDecoderStream();
-    const inputDone = port.readable.pipeTo(decoder.writable);
-    const inputStream = decoder.readable;
-
-    reader = inputStream.getReader();
+    port.readable.pipeTo(decoder.writable);
+    reader = decoder.readable.getReader();
     readLoop();
-  } catch (error) {
-    console.error("Serial connection failed:", error);
+  } catch (err) {
+    console.error("Serial error:", err);
   }
 };
 
-// --- Read serial data ---
 async function readLoop() {
   while (true) {
     const { value, done } = await reader.read();
@@ -69,25 +97,42 @@ async function readLoop() {
 }
 
 function handleInput(input) {
-  console.log("Micro:bit input:", input);
-  if (input === "A" || input === "B") {
-    // Check if a note is near the hit line
-    for (let i = notes.length-1; i >= 0; i--) {
-      if (abs(notes[i].y - (height-50)) < 30) {
-        score += 100;
-        notes.splice(i, 1);
-        break;
-      }
+  for (let i = notes.length-1; i >=0; i--) {
+    if (input === "A" && notes[i].type === "left" && abs(notes[i].y - (height-50)) < 30) {
+      score += 100;
+      notes.splice(i,1);
+      break;
+    }
+    if (input === "B" && notes[i].type === "right" && abs(notes[i].y - (height-50)) < 30) {
+      score += 100;
+      notes.splice(i,1);
+      break;
     }
   }
 }
 
-// --- Spawn random notes (demo purposes) ---
-// hi :) 
+// --- File upload ---
+const fileInput = document.getElementById("audioUpload");
+fileInput.addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
 
-setInterval(() => {
-  notes.push({x: random(100, 500), y: 0});
-}, 800);
+  const arrayBuffer = await file.arrayBuffer();
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+  if (source) source.disconnect();
+  source = audioCtx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(audioCtx.destination);
+  source.start();
+  source.startTime = audioCtx.currentTime;
+
+  // Initialize beat timing
+  bpm = parseFloat(document.getElementById("bpmInput").value);
+  secondsPerBeat = 60 / bpm;
+  nextBeatTime = 0;
+  notes = [];
+});
 </script>
 </body>
 </html>
