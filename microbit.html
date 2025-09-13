@@ -17,39 +17,35 @@ let port, reader;
 let activeNotes = [];
 let score = 0;
 
-// Web Audio API setup
+// Beat detection
+let beatTimes = [];
+let beatIndex = 0;
+
+// Web Audio setup
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let audioBuffer = null;
 let source = null;
-const analyser = audioCtx.createAnalyser();
-analyser.fftSize = 1024;
-const bufferLength = analyser.frequencyBinCount;
-const dataArray = new Uint8Array(bufferLength);
 
-// Beat detection parameters
-let lastEnergy = 0;
-const threshold = 200;
-
-// --- p5.js canvas ---
+// p5.js setup
 function setup() {
   createCanvas(600, 400);
   textSize(20);
 }
 
-// --- Draw loop ---
+// Draw loop
 function draw() {
   background(30);
 
-  // Beat detection
-  if (source) {
-    analyser.getByteFrequencyData(dataArray);
-    let energy = dataArray.reduce((a,b)=>a+b,0)/dataArray.length;
-    if (energy - lastEnergy > threshold) {
-      // Random left/right note
+  if (source && beatTimes.length > 0) {
+    const currentTime = audioCtx.currentTime - source.startTime;
+
+    // Spawn notes on precomputed beats
+    while (beatIndex < beatTimes.length && currentTime >= beatTimes[beatIndex]) {
       const type = Math.random() < 0.5 ? "left" : "right";
       const x = type === "left" ? random(100, 250) : random(350, 500);
       activeNotes.push({x: x, y: 0, type: type});
+      beatIndex++;
     }
-    lastEnergy = energy;
   }
 
   // Draw notes
@@ -59,7 +55,7 @@ function draw() {
     ellipse(activeNotes[i].x, activeNotes[i].y, 30, 30);
 
     if (activeNotes[i].y > height-50) {
-      activeNotes.splice(i,1); // missed note
+      activeNotes.splice(i,1);
     }
   }
 
@@ -116,23 +112,54 @@ function handleInput(input) {
   }
 }
 
-// --- Handle audio file upload ---
+// --- Audio file upload & preprocessing ---
 const fileInput = document.getElementById("audioUpload");
 fileInput.addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) return;
 
   const arrayBuffer = await file.arrayBuffer();
-  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+  audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
+  // Run beat detection preprocessing
+  beatTimes = detectBeats(audioBuffer);
+  beatIndex = 0;
+
+  // Play audio
   if (source) source.disconnect();
   source = audioCtx.createBufferSource();
   source.buffer = audioBuffer;
-  source.connect(analyser);
-  analyser.connect(audioCtx.destination);
+  source.connect(audioCtx.destination);
   source.start();
-  lastEnergy = 0;
+  source.startTime = audioCtx.currentTime; // custom property for timing
 });
+
+// --- Simple beat detection function ---
+function detectBeats(buffer) {
+  const channelData = buffer.getChannelData(0); // mono
+  const sampleRate = buffer.sampleRate;
+  const frameSize = 1024;
+  const hopSize = 512;
+  const energies = [];
+
+  // Calculate short-time energy
+  for (let i = 0; i < channelData.length - frameSize; i += hopSize) {
+    let sum = 0;
+    for (let j = 0; j < frameSize; j++) {
+      sum += channelData[i+j] * channelData[i+j];
+    }
+    energies.push(sum);
+  }
+
+  // Detect peaks in energy
+  const beatTimes = [];
+  for (let i = 1; i < energies.length-1; i++) {
+    if (energies[i] > energies[i-1] && energies[i] > energies[i+1] && energies[i] > 0.001) {
+      beatTimes.push(i * hopSize / sampleRate);
+    }
+  }
+  return beatTimes;
+}
 </script>
 </body>
 </html>
