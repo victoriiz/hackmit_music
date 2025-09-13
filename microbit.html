@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Micro:bit Rhythm Game</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+</head>
+<body>
+<button id="connectBtn">Connect Micro:bit via USB</button>
+
+<script>
+let port;
+let reader;
+let notes = [];
+let score = 0;
+
+function setup() {
+  createCanvas(600, 400);
+  textSize(20);
+}
+
+function draw() {
+  background(30);
+
+  // Draw falling notes
+  for (let i = notes.length-1; i >= 0; i--) {
+    notes[i].y += 3;
+    ellipse(notes[i].x, notes[i].y, 30, 30);
+
+    // Remove notes past hit line
+    if (notes[i].y > height-50) {
+      notes.splice(i, 1);
+    }
+  }
+
+  // Draw hit line
+  stroke(255,0,0);
+  line(0, height-50, width, height-50);
+
+  // Display score
+  fill(255);
+  text("Score: " + score, 20, 30);
+}
+
+// --- Connect to Micro:bit via USB ---
+document.getElementById("connectBtn").onclick = async () => {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+
+    const decoder = new TextDecoderStream();
+    const inputDone = port.readable.pipeTo(decoder.writable);
+    const inputStream = decoder.readable;
+
+    reader = inputStream.getReader();
+    readLoop();
+  } catch (error) {
+    console.error("Serial connection failed:", error);
+  }
+};
+
+// --- Read serial data ---
+async function readLoop() {
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (value) handleInput(value.trim());
+  }
+}
+
+function handleInput(input) {
+  console.log("Micro:bit input:", input);
+  if (input === "A" || input === "B") {
+    // Check if a note is near the hit line
+    for (let i = notes.length-1; i >= 0; i--) {
+      if (abs(notes[i].y - (height-50)) < 30) {
+        score += 100;
+        notes.splice(i, 1);
+        break;
+      }
+    }
+  }
+}
+
+// --- Spawn random notes (demo purposes) ---
+setInterval(() => {
+  notes.push({x: random(100, 500), y: 0});
+}, 800);
+</script>
+</body>
+</html>
