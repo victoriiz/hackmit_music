@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Micro:bit Rhythm Game</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+<meta charset="utf-8">
+<title>Micro:bit Rhythm Game</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
 </head>
 <body>
 <h2>Micro:bit Rhythm Game</h2>
 <button id="connectBtn">Connect Micro:bit via USB</button>
 <input type="file" id="audioUpload" accept="audio/*">
-<label>BPM: <input type="number" id="bpmInput" value="120"></label>
+<p>Estimated BPM: <span id="bpmDisplay">0</span></p>
 <p>Score: <span id="scoreDisplay">0</span></p>
 
 <script>
@@ -39,14 +39,13 @@ function draw() {
   if (source) {
     const currentTime = audioCtx.currentTime - source.startTime;
 
-    // Spawn note if it's time for next beat
+    // Spawn notes on beat
     if (currentTime >= nextBeatTime) {
       nextBeatTime += secondsPerBeat;
 
       // Random left/right note
       const type = Math.random() < 0.5 ? "left" : "right";
       const x = type === "left" ? random(100, 250) : random(350, 500);
-      // Calculate starting y so it reaches hit line at exact beat
       const y = 0;
       const speed = (height - 50) / noteTravelTime;
       notes.push({x, y, type, speed});
@@ -61,7 +60,7 @@ function draw() {
     ellipse(notes[i].x, notes[i].y, 30, 30);
 
     if (notes[i].y > height) {
-      notes.splice(i,1); // remove missed note
+      notes.splice(i,1);
     }
   }
 
@@ -74,7 +73,7 @@ function draw() {
   document.getElementById("scoreDisplay").innerText = score;
 }
 
-// --- Micro:bit USB connection ---
+// --- Micro:bit USB ---
 document.getElementById("connectBtn").onclick = async () => {
   try {
     port = await navigator.serial.requestPort();
@@ -111,7 +110,7 @@ function handleInput(input) {
   }
 }
 
-// --- File upload ---
+// --- Audio upload ---
 const fileInput = document.getElementById("audioUpload");
 fileInput.addEventListener("change", async (event) => {
   const file = event.target.files[0];
@@ -120,19 +119,57 @@ fileInput.addEventListener("change", async (event) => {
   const arrayBuffer = await file.arrayBuffer();
   const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
+  // Estimate BPM from audio
+  bpm = estimateBPM(audioBuffer);
+  secondsPerBeat = 60 / bpm;
+  nextBeatTime = 0;
+  notes = [];
+  document.getElementById("bpmDisplay").innerText = Math.round(bpm);
+
+  // Play audio
   if (source) source.disconnect();
   source = audioCtx.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(audioCtx.destination);
   source.start();
   source.startTime = audioCtx.currentTime;
-
-  // Initialize beat timing
-  bpm = parseFloat(document.getElementById("bpmInput").value);
-  secondsPerBeat = 60 / bpm;
-  nextBeatTime = 0;
-  notes = [];
 });
+
+// --- Simple BPM estimation ---
+function estimateBPM(buffer) {
+  const data = buffer.getChannelData(0); // mono
+  const sampleRate = buffer.sampleRate;
+  const frameSize = 1024;
+  const hopSize = 512;
+  let energies = [];
+
+  // Compute short-time energy
+  for (let i = 0; i < data.length - frameSize; i += hopSize) {
+    let sum = 0;
+    for (let j = 0; j < frameSize; j++) sum += data[i+j]*data[i+j];
+    energies.push(sum);
+  }
+
+  // Detect peaks
+  let peakTimes = [];
+  for (let i = 1; i < energies.length-1; i++) {
+    if (energies[i] > energies[i-1] && energies[i] > energies[i+1] && energies[i] > 0.01) {
+      peakTimes.push(i*hopSize/sampleRate);
+    }
+  }
+
+  // Compute inter-beat intervals
+  let intervals = [];
+  for (let i = 1; i < peakTimes.length; i++) {
+    intervals.push(peakTimes[i]-peakTimes[i-1]);
+  }
+
+  if (intervals.length === 0) return 120;
+
+  const avgInterval = intervals.reduce((a,b)=>a+b,0)/intervals.length;
+  const estimatedBPM = 60/avgInterval;
+  return Math.min(Math.max(estimatedBPM, 60), 200); // clamp to 60-200 BPM
+}
 </script>
 </body>
 </html>
