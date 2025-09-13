@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suno Music Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'spin-slow': 'spin 3s linear infinite',
+                        'pulse-glow': 'pulse-glow 2s ease-in-out infinite alternate'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @keyframes pulse-glow {
+            from { box-shadow: 0 0 5px rgba(59, 130, 246, 0.5); }
+            to { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 0 30px rgba(59, 130, 246, 0.4); }
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn-hover:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+    
+    <!-- Header -->
+    <div class="text-center py-8">
+        <h1 class="text-4xl font-bold text-white mb-2 flex items-center justify-center gap-2">
+            <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+            </svg>
+            Suno Music Generator
+        </h1>
+        <p class="text-blue-200">Create AI-generated music with custom styles and rhythms</p>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-6">
+        
+        <!-- Generation Form -->
+        <div class="glass-effect rounded-2xl p-6 mb-6">
+            <form id="musicForm" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Prompt Input -->
+                <div class="md:col-span-2">
+                    <label class="block text-white font-medium mb-2">Music Prompt *</label>
+                    <textarea 
+                        id="prompt" 
+                        placeholder="Describe the music you want to create... (e.g., 'A relaxing piano melody with gentle strings')"
+                        class="w-full p-3 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:border-blue-400 focus:outline-none resize-none"
+                        rows="3"
+                        required
+                    ></textarea>
+                </div>
+
+                <!-- Style Selection -->
+                <div>
+                    <label class="block text-white font-medium mb-2">Music Style</label>
+                    <select 
+                        id="style" 
+                        class="w-full p-3 rounded-lg bg-white/20 text-white border border-white/30 focus:border-blue-400 focus:outline-none"
+                    >
+                        <option value="pop">Pop</option>
+                        <option value="rock">Rock</option>
+                        <option value="jazz">Jazz</option>
+                        <option value="classical">Classical</option>
+                        <option value="electronic">Electronic</option>
+                        <option value="hiphop">Hip-Hop</option>
+                        <option value="country">Country</option>
+                        <option value="reggae">Reggae</option>
+                    </select>
+                </div>
+
+                <!-- Rhythm Selection -->
+                <div>
+                    <label class="block text-white font-medium mb-2">Rhythmic Pattern</label>
+                    <select 
+                        id="rhythm" 
+                        class="w-full p-3 rounded-lg bg-white/20 text-white border border-white/30 focus:border-blue-400 focus:outline-none"
+                    >
+                        <option value="4_4">4/4 (Standard)</option>
+                        <option value="3_4">3/4 (Waltz)</option>
+                        <option value="6_8">6/8 (Compound)</option>
+                        <option value="syncopated">Syncopated</option>
+                        <option value="shuffle">Shuffle</option>
+                    </select>
+                </div>
+
+                <!-- Duration -->
+                <div>
+                    <label class="block text-white font-medium mb-2">Duration</label>
+                    <input 
+                        type="range" 
+                        id="duration" 
+                        min="15" 
+                        max="120" 
+                        value="30" 
+                        class="w-full"
+                    />
+                    <div class="text-white/70 text-sm mt-1">
+                        <span id="durationValue">30</span> seconds
+                    </div>
+                </div>
+
+                <!-- Mood -->
+                <div>
+                    <label class="block text-white font-medium mb-2">Mood</label>
+                    <select 
+                        id="mood" 
+                        class="w-full p-3 rounded-lg bg-white/20 text-white border border-white/30 focus:border-blue-400 focus:outline-none"
+                    >
+                        <option value="happy">Happy</option>
+                        <option value="sad">Sad</option>
+                        <option value="energetic">Energetic</option>
+                        <option value="calm">Calm</option>
+                        <option value="mysterious">Mysterious</option>
+                        <option value="romantic">Romantic</option>
+                    </select>
+                </div>
+
+                <!-- Options -->
+                <div class="md:col-span-2">
+                    <label class="flex items-center text-white">
+                        <input type="checkbox" id="instrumental" class="mr-2 rounded">
+                        Instrumental (no vocals)
+                    </label>
+                </div>
+
+                <!-- API Key Input -->
+                <div class="md:col-span-2">
+                    <label class="block text-white font-medium mb-2">Suno API Key *</label>
+                    <input 
+                        type="password" 
+                        id="apiKey" 
+                        placeholder="Enter your Suno API key"
+                        class="w-full p-3 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:border-blue-400 focus:outline-none"
+                        required
+                    />
+                    <p class="text-white/60 text-sm mt-1">Your API key is stored locally and never sent to our servers</p>
+                </div>
+
+                <!-- Generate Button -->
+                <div class="md:col-span-2">
+                    <button 
+                        type="submit" 
+                        id="generateBtn"
+                        class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 btn-hover transition-all duration-200"
+                    >
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                        </svg>
+                        Generate Music
+                    </button>
+                </div>
+
+            </form>
+        </div>
+
+        <!-- Current Job Status -->
+        <div id="statusSection" class="glass-effect rounded-2xl p-6 mb-6 hidden">
+            <div class="flex items-center gap-3 mb-4">
+                <svg class="h-5 w-5 text-blue-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span class="text-white font-medium">Generating Music...</span>
+            </div>
+            <div class="w-full bg-white/20 rounded-full h-2 mb-2">
+                <div id="progressBar" class="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <p id="statusText" class="text-white/70 text-sm">Status: Starting...</p>
+        </div>
+
+        <!-- Generated Tracks -->
+        <div id="tracksSection" class="glass-effect rounded-2xl p-6 hidden">
+            <h2 class="text-2xl font-bold text-white mb-4">Generated Tracks</h2>
+            <div id="tracksList" class="space-y-4">
+                <!-- Tracks will be dynamically added here -->
+            </div>
+        </div>
+
+        <!-- Error Messages -->
+        <div id="errorSection" class="glass-effect rounded-2xl p-6 mb-6 border-red-500/30 bg-red-500/10 hidden">
+            <div class="flex items-center gap-3 mb-2">
+                <svg class="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="text-red-400 font-medium">Error</span>
+            </div>
+            <p id="errorText" class="text-red-300"></p>
+        </div>
+
+    </div>
+
+    <script>
+        // Configuration
+        const SUNO_API_BASE = 'https://api.suno.com/v1'; // Update with actual Suno API URL
+        
+        // Global state
+        let currentJob = null;
+        let generatedTracks = JSON.parse(localStorage.getItem('generatedTracks') || '[]');
+        let currentAudio = null;
+
+        // DOM elements
+        const elements = {
+            form: document.getElementById('musicForm'),
+            generateBtn: document.getElementById('generateBtn'),
+            statusSection: document.getElementById('statusSection'),
+            progressBar: document.getElementById('progressBar'),
+            statusText: document.getElementById('statusText'),
+            tracksSection: document.getElementById('tracksSection'),
+            tracksList: document.getElementById('tracksList'),
+            errorSection: document.getElementById('errorSection'),
+            errorText: document.getElementById('errorText'),
+            durationSlider: document.getElementById('duration'),
+            durationValue: document.getElementById('durationValue')
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedTracks();
+            setupEventListeners();
+            loadSavedApiKey();
+        });
+
+        function setupEventListeners() {
+            elements.form.addEventListener('submit', handleGenerate);
+            elements.durationSlider.addEventListener('input', updateDurationDisplay);
+        }
+
+        function updateDurationDisplay() {
+            elements.durationValue.textContent = elements.durationSlider.value;
+        }
+
+        function loadSavedApiKey() {
+            const savedApiKey = localStorage.getItem('sunoApiKey');
+            if (savedApiKey) {
+                document.getElementById('apiKey').value = savedApiKey;
+            }
+        }
+
+        function saveApiKey(apiKey) {
+            localStorage.setItem('sunoApiKey', apiKey);
+        }
+
+        function showError(message) {
+            elements.errorText.textContent = message;
+            elements.errorSection.classList.remove('hidden');
+            elements.errorSection.classList.add('fade-in');
+            setTimeout(() => {
+                elements.errorSection.classList.add('hidden');
+            }, 5000);
+        }
+
+        function hideError() {
+            elements.errorSection.classList.add('hidden');
+        }
+
+        async function handleGenerate(e) {
+            e.preventDefault();
+            hideError();
+
+            const formData = new FormData(elements.form);
+            const apiKey = document.getElementById('apiKey').value;
+            const prompt = document.getElementById('prompt').value;
+
+            if (!apiKey) {
+                showError('Please enter your Suno API key');
+                return;
+            }
+
+            if (!prompt.trim()) {
+                showError('Please enter a music prompt');
+                return;
+            }
+
+            // Save API key
+            saveApiKey(apiKey);
+
+            // Prepare request data
+            const requestData = {
+                prompt: prompt,
+                style: document.getElementById('style').value,
+                rhythm: document.getElementById('rhythm').value,
+                duration: parseInt(document.getElementById('duration').value),
+                instrumental: document.getElementById('instrumental').checked,
+                mood: document.getElementById('mood').value
+            };
+
+            try {
+                await generateMusic(requestData, apiKey);
+            } catch (error) {
+                showError('Failed to generate music: ' + error.message);
+            }
+        }
+
+        async function generateMusic(requestData, apiKey) {
+            elements.generateBtn.disabled = true;
+            elements.generateBtn.innerHTML = `
+                <svg class="h-5 w-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Generating...
+            `;
+
+            try {
+                const response = await fetch(`${SUNO_API_BASE}/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                currentJob = {
+                    jobId: result.id,
+                    status: 'processing',
+                    progress: 0,
+                    requestData: requestData
+                };
+
+                showStatusSection();
+                startPolling(apiKey);
+
+            } catch (error) {
+                console.error('Generation failed:', error);
+                showError(error.message);
+            } finally {
+                resetGenerateButton();
+            }
+        }
+
+        function resetGenerateButton() {
+            elements.generateBtn.disabled = false;
+            elements.generateBtn.innerHTML = `
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                </svg>
+                Generate Music
+            `;
+        }
+
+        function showStatusSection() {
+            elements.statusSection.classList.remove('hidden');
+            elements.statusSection.classList.add('fade-in');
+        }
+
+        function hideStatusSection() {
+            elements.statusSection.classList.add('hidden');
+        }
+
+        async function startPolling(apiKey) {
+            const pollInterval = setInterval(async () => {
+                try {
+                    await checkJobStatus(apiKey);
+                    
+                    if (!currentJob || currentJob.status === 'completed' || currentJob.status === 'failed') {
+                        clearInterval(pollInterval);
+                        hideStatusSection();
+                    }
+                } catch (error) {
+                    console.error('Polling error:', error);
+                    clearInterval(pollInterval);
+                    hideStatusSection();
+                    showError('Failed to check generation status');
+                }
+            }, 3000);
+        }
+
+        async function checkJobStatus(apiKey) {
+            if (!currentJob) return;
+
+            const response = await fetch(`${SUNO_API_BASE}/status/${currentJob.jobId}`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            
+            currentJob.status = result.status;
+            currentJob.progress = result.progress || 0;
+            
+            // Update UI
+            elements.progressBar.style.width = `${currentJob.progress}%`;
+            elements.statusText.textContent = `Status: ${result.status}`;
+
+            if (result.status === 'completed' && result.audio_url) {
+                const newTrack = {
+                    id: currentJob.jobId,
+                    prompt: currentJob.requestData.prompt,
+                    style: currentJob.requestData.style,
+                    rhythm: currentJob.requestData.rhythm,
+                    audioUrl: result.audio_url,
+                    createdAt: new Date().toISOString(),
+                    metadata: result.metadata || {}
+                };
+
+                generatedTracks.unshift(newTrack);
+                saveTracksToStorage();
+                addTrackToUI(newTrack);
+                currentJob = null;
+            } else if (result.status === 'failed') {
+                showError('Music generation failed. Please try again.');
+                currentJob = null;
+            }
+        }
+
+        function saveTracksToStorage() {
+            // Limit to last 50 tracks
+            if (generatedTracks.length > 50) {
+                generatedTracks = generatedTracks.slice(0, 50);
+            }
+            localStorage.setItem('generatedTracks', JSON.stringify(generatedTracks));
+        }
+
+        function loadSavedTracks() {
+            if (generatedTracks.length > 0) {
+                elements.tracksSection.classList.remove('hidden');
+                generatedTracks.forEach(track => addTrackToUI(track));
+            }
+        }
+
+        function addTrackToUI(track) {
+            elements.tracksSection.classList.remove('hidden');
+            elements.tracksSection.classList.add('fade-in');
+
+            const trackElement = document.createElement('div');
+            trackElement.className = 'bg-white/10 rounded-lg p-4 fade-in';
+            trackElement.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                        <h3 class="text-white font-medium truncate">${track.prompt}</h3>
+                        <p class="text-white/70 text-sm">
+                            ${track.style} • ${track.rhythm.replace('_', '/')} • ${new Date(track.createdAt).toLocaleDateString()}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="togglePlay('${track.id}')" class="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-full btn-hover transition-all duration-200">
+                            <svg class="h-4 w-4 play-icon-${track.id}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h1m4 0h1M9 21v-2a4 4 0 014-4h.01M15 5v2a4 4 0 014 4h.01"/>
+                            </svg>
+                        </button>
+                        <button onclick="downloadTrack('${track.audioUrl}', '${track.id}')" class="p-2 bg-green-500 hover:bg-green-600 text-white rounded-full btn-hover transition-all duration-200">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <audio id="audio-${track.id}" class="w-full mt-3 hidden" controls>
+                    <source src="${track.audioUrl}" type="audio/mpeg">
+                    Your browser does not support the audio element.
+                </audio>
+            `;
+
+            elements.tracksList.insertBefore(trackElement, elements.tracksList.firstChild);
+        }
+
+        function togglePlay(trackId) {
+            const audio = document.getElementById(`audio-${trackId}`);
+            const playIcon = document.querySelector(`.play-icon-${trackId}`);
+            
+            // Stop other audio if playing
+            if (currentAudio && currentAudio !== audio) {
+                currentAudio.pause();
+                currentAudio.parentElement.classList.add('hidden');
+                // Reset other play icons
+                document.querySelectorAll('[class*="play-icon-"]').forEach(icon => {
+                    if (icon !== playIcon) {
+                        icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h1m4 0h1M9 21v-2a4 4 0 014-4h.01M15 5v2a4 4 0 014 4h.01"/>`;
+                    }
+                });
+            }
+
+            if (audio.paused) {
+                audio.play();
+                audio.parentElement.classList.remove('hidden');
+                currentAudio = audio;
+                
+                // Update play icon to pause
+                playIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6"/>`;
+                
+                audio.addEventListener('ended', () => {
+                    audio.parentElement.classList.add('hidden');
+                    playIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h1m4 0h1M9 21v-2a4 4 0 014-4h.01M15 5v2a4 4 0 014 4h.01"/>`;
+                    currentAudio = null;
+                });
+            } else {
+                audio.pause();
+                audio.parentElement.classList.add('hidden');
+                playIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h1m4 0h1M9 21v-2a4 4 0 014-4h.01M15 5v2a4 4 0 014 4h.01"/>`;
+                currentAudio = null;
+            }
+        }
+
+        async function downloadTrack(audioUrl, trackId) {
+            try {
+                const response = await fetch(audioUrl);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `suno-generated-${trackId}.mp3`;
+                document.body.appendChild(a);
+                a.click();
+                
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (error) {
+                console.error('Download failed:', error);
+                showError('Download failed. Please try again.');
+            }
+        }
+    </script>
+
+</body>
+</html>
