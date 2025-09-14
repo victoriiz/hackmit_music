@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Beat Rush</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+  <style>
+    body { font-family: Inter, Arial, sans-serif; background:#111; color:#eee; margin:0; padding:12px; }
+    .controls { display:flex; gap:12px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
+    input, button { padding:8px; border-radius:6px; border: none; }
+    button { background:#2b7; color:#032; cursor:pointer; }
+    label { font-size:14px; }
+    .hud { margin-top:8px; }
+    canvas { display:block; margin:8px auto; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.6); }
+  </style>
+</head>
+<body>
+  <h2 style="text-align:center">Beat Rush</h2>
+
+  <div class="controls">
+    <button id="connectBtn">Connect micro:bit (USB)</button>
+
+    <label>
+      Audio:
+      <input type="file" id="audioUpload" accept="audio/*">
+    </label>
+
+    <label>
+      beats.json:
+      <input type="file" id="beatsUpload" accept=".json,application/json">
+    </label>
+
+    <button id="startBtn">Start Playback & Game</button>
+  </div>
+
+  <div class="hud" style="text-align:center">
+    Detected tempo: <strong id="tempoDisplay">—</strong> BPM |
+    Score: <strong id="scoreDisplay">0</strong>
+  </div>
+
+<script>
+// ---------- CONFIG ----------
+const CANVAS_W = 780, CANVAS_H = 420;
+const HIT_LINE_Y = 350;
+const START_Y = -40;
+const NOTE_TRAVEL_TIME = 1.8;  // seconds for a note to fall to the hit line
+const HIT_WINDOW = 0.20;       // seconds allowed (+/-) for a hit
+
+// ---------- STATE ----------
+let scheduledBeats = [];   // array of {time: seconds, type: "left"|"right"}
+let beatIndex = 0;
+let activeNotes = [];      // {x, y, type, beatTime, spawnTime, speed, img}
+let score = 0;
+
+// Web Audio
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let audioBuffer = null;
+let bufferSource = null;
+let audioStarted = false;
+let audioStartTime = 0;
+let tempoFromJSON = null;
+
+// Serial (micro:bit)
+let port = null, reader = null;
+
+// ---------- NOTE IMAGES ----------
+let whiteNotes = [];
+let purpleNotes = [];
+
+function preload() {
+  try {
+    whiteNotes.push(loadImage('note_pngs/Note_white1.png', () => console.log('White1 loaded')));
+    whiteNotes.push(loadImage('note_pngs/Note_white2.png', () => console.log('White2 loaded')));
+    whiteNotes.push(loadImage('note_pngs/Note_white3.png', () => console.log('White3 loaded')));
+
+    purpleNotes.push(loadImage('note_pngs/Note_purple1.png', () => console.log('Purple1 loaded')));
+    purpleNotes.push(loadImage('note_pngs/Note_purple2.png', () => console.log('Purple2 loaded')));
+    purpleNotes.push(loadImage('note_pngs/Note_purple3.png', () => console.log('Purple3 loaded')));
+  } catch(err) {
+    console.error('Image load failed:', err);
+  }
+}
+
+// ---------- p5.js ----------
+function setup(){
+  createCanvas(CANVAS_W, CANVAS_H);
+  textSize(18);
+}
+
+function draw(){
+  background(18);
+
+  // Spawn notes
+  if (audioStarted && scheduledBeats.length > 0){
+    const now = audioCtx.currentTime - audioStartTime;
+    while (beatIndex < scheduledBeats.length && now >= (scheduledBeats[beatIndex].time - NOTE_TRAVEL_TIME)){
+      const beat = scheduledBeats[beatIndex];
+      const x = beat.type === "left" ? random(130, 270) : random(510, 650);
+      const spawnTime = beat.time - NOTE_TRAVEL_TIME;
+      const speed = (HIT_LINE_Y - START_Y) / NOTE_TRAVEL_TIME;
+
+      // Pick a random image for the side
+      const img = beat.type === "left" ? random(whiteNotes) : random(purpleNotes);
+
+      activeNotes.push({ x, y: START_Y, type: beat.type, beatTime: beat.time, spawnTime, speed, img });
+      beatIndex++;
+    }
+  }
+
+  // Move and draw notes
+  for (let i = activeNotes.length - 1; i >= 0; i--){
+    const n = activeNotes[i];
+    n.y += n.speed * (deltaTime / 1000);
+    
+    imageMode(CENTER);
+    image(n.img, n.x, n.y, 36, 36); // size adjustable
+
+    if (n.y > height + 80) activeNotes.splice(i, 1);
+  }
+
+  // Draw hit line
+  stroke(255, 60, 60);
+  strokeWeight(3);
+  line(0, HIT_LINE_Y, width, HIT_LINE_Y);
+
+  // HUD
+  noStroke();
+  fill(230);
+  textAlign(LEFT, TOP);
+  text("Score: " + score, 12, 12);
+  document.getElementById("scoreDisplay").innerText = score;
+}
+
+// ---------- Serial (micro:bit) ----------
+document.getElementById("connectBtn").addEventListener("click", async () => {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    const decoder = new TextDecoderStream();
+    port.readable.pipeTo(decoder.writable);
+    reader = decoder.readable.getReader();
+    readLoop();
+    alert("Connected to micro:bit (USB). Press A/B to play.");
+  } catch (err) {
+    console.error("Serial error:", err);
+    alert("Serial connect failed: " + (err && err.message ? err.message : err));
+  }
+});
+
+async function readLoop(){
+  try {
+    while (true){
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      handleInput(value.trim());
+    }
+  } catch (err) {
+    console.error("Serial readLoop error", err);
+  }
+}
+
+function handleInput(input){
+  if (!audioStarted) return;
+
+  const now = audioCtx.currentTime - audioStartTime;
+  let bestIndex = -1;
+  let bestDt = Infinity;
+  for (let i = 0; i < activeNotes.length; i++){
+    const n = activeNotes[i];
+    if ((input === "A" && n.type === "left") || (input === "B" && n.type === "right")){
+      const dt = Math.abs(n.beatTime - now);
+      if (dt < bestDt){
+        bestDt = dt;
+        bestIndex = i;
+      }
+    }
+  }
+
+  if (bestIndex !== -1 && bestDt <= HIT_WINDOW){
+    score += Math.round((HIT_WINDOW - bestDt) / HIT_WINDOW * 100) + 50;
+    activeNotes.splice(bestIndex, 1);
+    document.getElementById("scoreDisplay").innerText = score;
+  }
+}
+
+// ---------- File uploads ----------
+const audioInput = document.getElementById("audioUpload");
+const beatsInput = document.getElementById("beatsUpload");
+const startBtn = document.getElementById("startBtn");
+
+audioInput.addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const arrayBuffer = await f.arrayBuffer();
+  audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+  alert("Audio loaded (" + f.name + "). Now load beats.json and press Start.");
+});
+
+beatsInput.addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const text = await f.text();
+    const data = JSON.parse(text);
+    if (!data.notes || !Array.isArray(data.notes)) throw new Error("beats.json missing notes array");
+    scheduledBeats = data.notes.slice().sort((a,b) => a.time - b.time);
+    beatIndex = 0;
+    tempoFromJSON = data.tempo || null;
+    document.getElementById("tempoDisplay").innerText = tempoFromJSON ? Math.round(tempoFromJSON) : "—";
+    alert(`Loaded beats.json with ${scheduledBeats.length} beats.`);
+  } catch (err) {
+    console.error("Failed to parse beats.json", err);
+    alert("Error parsing beats.json: " + err.message);
+  }
+});
+
+startBtn.addEventListener("click", async () => {
+  if (!audioBuffer) { alert("Please upload an audio file first."); return; }
+  if (!scheduledBeats || scheduledBeats.length === 0) { alert("Please upload a beats.json."); return; }
+
+  await audioCtx.resume();
+  if (bufferSource) {
+    try { bufferSource.stop(); } catch(e) {}
+    bufferSource.disconnect();
+  }
+
+  bufferSource = audioCtx.createBufferSource();
+  bufferSource.buffer = audioBuffer;
+  bufferSource.connect(audioCtx.destination);
+
+  audioStartTime = audioCtx.currentTime + 0.05;
+  bufferSource.start(audioStartTime);
+  audioStarted = true;
+  beatIndex = 0;
+  activeNotes = [];
+  score = 0;
+  document.getElementById("scoreDisplay").innerText = score;
+});
+
+// ---------- Debug hotkeys ----------
+window.addEventListener('keydown', (e) => {
+  if (e.key === '1') handleInput('A'); 
+  if (e.key === '2') handleInput('B'); 
+  if (e.key === 'r') {
+    if (bufferSource) try { bufferSource.stop(); } catch(e) {}
+    audioStarted = false;
+    beatIndex = 0;
+    activeNotes = [];
+    score = 0;
+    document.getElementById("scoreDisplay").innerText = 0;
+  }
+});
+</script>
+</body>
+</html>
