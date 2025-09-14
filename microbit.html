@@ -13,14 +13,15 @@
 <p>Score: <span id="scoreDisplay">0</span></p>
 
 <script>
-let port, reader;
+let port, reader; //Micro:bit WebUSB variables
 let notes = [];
 let score = 0;
 let beatData = null;
 let beatIndex = 0;
+let startTime = 0;
 
 // Web Audio
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)(); // initialize Web audio API
 let source = null;
 
 // Beat sync
@@ -29,7 +30,7 @@ let secondsPerBeat = 0.5;
 let nextBeatTime = 0;
 let noteTravelTime = 2; // seconds for note to fall from top to hit line
 
-// p5.js setup
+// Game environment setup through p5.js
 function setup() {
   createCanvas(600, 400);
   textSize(20);
@@ -39,23 +40,22 @@ function draw() {
   background(30);
 
   if (source && beatData) {
-    const currentTime = audioCtx.currentTime - source.startTime;
+    const currentTime = audioCtx.currentTime - startTime;
 
     // Spawn notes from JSON
-    while (
-      beatIndex < beatData.notes.length &&
+    while (beatIndex < beatData.notes.length &&
       currentTime >= beatData.notes[beatIndex].time
     ) {
       const beat = beatData.notes[beatIndex];
       const x = beat.type === "left" ? random(100, 250) : random(350, 500);
-      const speed = (height - 50) / noteTravelTime;
+      const speed = (height - 50) / noteTravelTime; //note speed calculation
       notes.push({ x, y: 0, type: beat.type, speed });
       beatIndex++;
     }
   }
-  // … rest unchanged …
+  // … rest unchanged …}  
 
-  // Draw and move notes
+  // Generate and move notes
   for (let i = notes.length-1; i >= 0; i--) {
     notes[i].y += notes[i].speed * (deltaTime / 1000);
 
@@ -80,7 +80,7 @@ function draw() {
 document.getElementById("connectBtn").onclick = async () => {
   try {
     port = await navigator.serial.requestPort();
-    await port.open({ baudRate: 115200 });
+    await port.open({ baudRate: 115200 }); //Micro:bit default serial connection rate
     const decoder = new TextDecoderStream();
     port.readable.pipeTo(decoder.writable);
     reader = decoder.readable.getReader();
@@ -90,6 +90,7 @@ document.getElementById("connectBtn").onclick = async () => {
   }
 };
 
+//Continuously reads output from Micro:bit and passes it to handleInput()
 async function readLoop() {
   while (true) {
     const { value, done } = await reader.read();
@@ -98,18 +99,23 @@ async function readLoop() {
   }
 }
 
+//Checks if micro:bit sent 'A' or 'B' and performs the suitable logic
 function handleInput(input) {
   for (let i = notes.length-1; i >=0; i--) {
-    if (input === "A" && notes[i].type === "left" && abs(notes[i].y - (height-50)) < 30) {
+    if (input === "A" && notes[i].type === "left" && Math.abs(notes[i].y - (height - 50)) < 30) {
       score += 100;
       notes.splice(i,1);
       break;
     }
-    if (input === "B" && notes[i].type === "right" && abs(notes[i].y - (height-50)) < 30) {
+    if (input === "B" && notes[i].type === "right" && Math.abs(notes[i].y - (height - 50)) < 30) {
       score += 100;
       notes.splice(i,1);
       break;
     }
+    if (input === "SHAKE") {
+      score += 50; // or trigger a bonus effect
+    }
+
   }
 }
 
@@ -123,22 +129,24 @@ fileInput.addEventListener("change", async (event) => {
     await audioCtx.resume();
   }
 
-  const arrayBuffer = await file.arrayBuffer();
-  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+  const arrayBuffer = await file.arrayBuffer(); //converts file to an array buffer
+  const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer); //decodes audio file to an audio buffer for furthur analyzation
 
   // Estimate BPM
   bpm = estimateBPM(audioBuffer);
   secondsPerBeat = 60 / bpm;
   document.getElementById("bpmDisplay").innerText = Math.round(bpm);
 
-  // Generate JSON beatData
+  // Generate JSON beatData (creates rythm map to decide which side note appers and at what timestamp)
   beatData = { notes: [] };
-  for (let i = 0; i * secondsPerBeat < audioBuffer.duration; i++) {
+  const beatSpacing = 2; // spawn every 2 beats
+  for (let i = 0; i * secondsPerBeat * beatSpacing < audioBuffer.duration; i++) {
     beatData.notes.push({
-      time: i * secondsPerBeat,
+      time: i * secondsPerBeat * beatSpacing,
       type: Math.random() < 0.5 ? "left" : "right"
     });
   }
+
   console.log("Generated beatData", beatData);
 
   beatIndex = 0;
@@ -150,7 +158,7 @@ fileInput.addEventListener("change", async (event) => {
   source.buffer = audioBuffer;
   source.connect(audioCtx.destination);
   source.start();
-  source.startTime = audioCtx.currentTime;
+  startTime = audioCtx.currentTime;
 });
 
 // --- Simple BPM estimation ---
@@ -184,9 +192,14 @@ function estimateBPM(buffer) {
 
   if (intervals.length === 0) return 120;
 
-  const avgInterval = intervals.reduce((a,b)=>a+b,0)/intervals.length;
-  const estimatedBPM = 60/avgInterval;
-  return Math.min(Math.max(estimatedBPM, 60), 200); // clamp to 60-200 BPM
+  let histogram = {};
+  intervals.forEach(interval => {
+    let rounded = Math.round(interval * 10) / 10;
+    histogram[rounded] = (histogram[rounded] || 0) + 1;
+  });
+  let dominantInterval = parseFloat(Object.entries(histogram).sort((a,b) => b[1]-a[1])[0][0]);
+  const estimatedBPM = 60 / dominantInterval;
+  return Math.min(Math.max(estimatedBPM, 90), 140);
 }
 </script>
 </body>
