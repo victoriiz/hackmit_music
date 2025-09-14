@@ -199,7 +199,8 @@ function estimateBPM(buffer) {
   });
   let dominantInterval = parseFloat(Object.entries(histogram).sort((a,b) => b[1]-a[1])[0][0]);
   const estimatedBPM = 60 / dominantInterval;
-  return Math.min(Math.max(estimatedBPM, 90), 140);
+  return Math.min(Math.max(estimatedBPM, 60), 200);
+
 }
 </script>
 </body>
