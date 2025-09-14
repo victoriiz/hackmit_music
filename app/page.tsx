@@ -4,8 +4,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Download, Music, Sparkles, Play, Pause } from "lucide-react";
+import { Download, Music, Sparkles, Play, Pause, Gamepad2 } from "lucide-react";
 import { SunoService, SunoClip } from "@/lib/suno-service";
+import dynamic from "next/dynamic";
+
+// Dynamically import MicrobitGame to avoid SSR issues
+const MicrobitGame = dynamic(() => import("@/components/MicrobitGame"), { ssr: false });
 
 export default function MusicGenerator() {
   const [prompt, setPrompt] = useState("");
@@ -27,6 +31,7 @@ export default function MusicGenerator() {
   const [isDownloading, setIsDownloading] = useState<{
     [key: string]: boolean;
   }>({});
+  const [showGameForClip, setShowGameForClip] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -666,7 +671,34 @@ export default function MusicGenerator() {
                                     </>
                                   )}
                                 </Button>
+
+                                {/* Launch Rhythm Game Button */}
+                                {clip.status === "complete" && clip.audio_url && (
+                                  <Button
+                                    onClick={() => setShowGameForClip(clip.id)}
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                  >
+                                    <Gamepad2 className="w-4 h-4 mr-2" />
+                                    Play Rhythm Game
+                                  </Button>
+                                )}
                               </div>
+                              {/* Show MicrobitGame if selected */}
+                              {showGameForClip === clip.id && clip.audio_url && (
+                                <div className="mt-4">
+                                  <MicrobitGame audioUrl={clip.audio_url || undefined} />
+                                  <Button
+                                    onClick={() => setShowGameForClip(null)}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="mt-2"
+                                  >
+                                    Close Game
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </Card>
