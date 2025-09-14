@@ -6,10 +6,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Download, Music, Sparkles, Play, Pause, Gamepad2 } from "lucide-react";
 import { SunoService, SunoClip } from "@/lib/suno-service";
-import dynamic from "next/dynamic";
+// import dynamic from "next/dynamic";
 
-// Dynamically import MicrobitGame to avoid SSR issues
-const MicrobitGame = dynamic(() => import("@/components/MicrobitGame"), { ssr: false });
+// MicrobitGame import and usage removed since game is now opened in a new tab
 
 export default function MusicGenerator() {
   const [prompt, setPrompt] = useState("");
@@ -31,7 +30,7 @@ export default function MusicGenerator() {
   const [isDownloading, setIsDownloading] = useState<{
     [key: string]: boolean;
   }>({});
-  const [showGameForClip, setShowGameForClip] = useState<string | null>(null);
+  // const [showGameForClip, setShowGameForClip] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -676,31 +675,27 @@ export default function MusicGenerator() {
 
                                 {/* Launch Rhythm Game Button */}
                                 {clip.status === "complete" && clip.audio_url && (
-                                  <Button
-                                    onClick={() => setShowGameForClip(clip.id)}
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex-1 bg-gradient-to-r from-orange-200 to-red-200 border-orange-400 text-orange-900 hover:from-orange-300 hover:to-red-300"
+                                  <a
+                                    href="WEBSITE.html"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ flex: 1, textDecoration: "none" }}
                                   >
-                                    <Gamepad2 className="w-4 h-4 mr-2" />
-                                    Step 3: Play Rhythm Game
-                                  </Button>
+                                    <Button
+                                      asChild
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full bg-gradient-to-r from-orange-200 to-red-200 border-orange-400 text-orange-900 hover:from-orange-300 hover:to-red-300"
+                                    >
+                                      <>
+                                        <Gamepad2 className="w-4 h-4 mr-2" />
+                                        Step 3: Play Rhythm Game
+                                      </>
+                                    </Button>
+                                  </a>
                                 )}
                               </div>
-                              {/* Show MicrobitGame if selected */}
-                              {showGameForClip === clip.id && clip.audio_url && (
-                                <div className="mt-4">
-                                  <MicrobitGame audioUrl={clip.audio_url || undefined} />
-                                  <Button
-                                    onClick={() => setShowGameForClip(null)}
-                                    variant="secondary"
-                                    size="sm"
-                                    className="mt-2"
-                                  >
-                                    Close Game
-                                  </Button>
-                                </div>
-                              )}
+                              {/* Embedded MicrobitGame removed */}
                             </div>
                           </div>
                         </Card>
