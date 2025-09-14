@@ -21,12 +21,18 @@ def process_audio(filename, out_file="beats.json"):
 
     # Alternate "left" and "right" for the notes
     beats_data = [
-        {"time": float(bt), "side": "left" if i % 2 == 0 else "right"}
-        for i, bt in enumerate(beat_times)
+        {"time": float(bt), "type": "left" if i % 2 == 0 else "right"}
+        for i, bt in enumerate(beat_times[::2])
     ]
 
+    # Wrap with tempo + notes
+    data = {
+        "tempo": tempo,
+        "notes": beats_data
+    }
+
     with open(out_file, "w") as f:
-        json.dump(beats_data, f, indent=2)
+        json.dump(data, f, indent=2)
 
     print(f"Saved {out_file} with {len(beats_data)} beats.")
 

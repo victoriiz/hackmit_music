@@ -162,46 +162,19 @@ fileInput.addEventListener("change", async (event) => {
 });
 
 // --- Simple BPM estimation ---
-function estimateBPM(buffer) {
-  const data = buffer.getChannelData(0); // mono
-  const sampleRate = buffer.sampleRate;
-  const frameSize = 1024;
-  const hopSize = 512;
-  let energies = [];
+document.getElementById("beatsFile").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const data = JSON.parse(event.target.result);
+    beats = data.notes || [];
+    document.getElementById("tempoDisplay").textContent =
+      `Tempo: ${data.tempo.toFixed(2)} BPM`;
+  };
+  reader.readAsText(file);
+});
 
-  // Compute short-time energy
-  for (let i = 0; i < data.length - frameSize; i += hopSize) {
-    let sum = 0;
-    for (let j = 0; j < frameSize; j++) sum += data[i+j]*data[i+j];
-    energies.push(sum);
-  }
-
-  // Detect peaks
-  let peakTimes = [];
-  for (let i = 1; i < energies.length-1; i++) {
-    if (energies[i] > energies[i-1] && energies[i] > energies[i+1] && energies[i] > 0.01) {
-      peakTimes.push(i*hopSize/sampleRate);
-    }
-  }
-
-  // Compute inter-beat intervals
-  let intervals = [];
-  for (let i = 1; i < peakTimes.length; i++) {
-    intervals.push(peakTimes[i]-peakTimes[i-1]);
-  }
-
-  if (intervals.length === 0) return 120;
-
-  let histogram = {};
-  intervals.forEach(interval => {
-    let rounded = Math.round(interval * 10) / 10;
-    histogram[rounded] = (histogram[rounded] || 0) + 1;
-  });
-  let dominantInterval = parseFloat(Object.entries(histogram).sort((a,b) => b[1]-a[1])[0][0]);
-  const estimatedBPM = 60 / dominantInterval;
-  return Math.min(Math.max(estimatedBPM, 60), 200);
-
-}
 </script>
 </body>
 </html>
