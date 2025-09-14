@@ -9,9 +9,11 @@
     .controls { display:flex; gap:12px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
     input, button { padding:8px; border-radius:6px; border: none; }
     button { background:#2b7; color:#032; cursor:pointer; }
+    button:disabled { background:#555; cursor:not-allowed; }
     label { font-size:14px; }
     .hud { margin-top:8px; }
     canvas { display:block; margin:8px auto; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.6); }
+    #loadingMsg { color: #7af; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -25,13 +27,14 @@
       <input type="file" id="audioUpload" accept="audio/*">
     </label>
 
-    <button id="startBtn">Start Playback & Game</button>
+    <button id="startBtn" disabled>Start Playback & Game</button>
   </div>
 
   <div class="hud" style="text-align:center">
     Detected tempo: <strong id="tempoDisplay">—</strong> BPM |
     Score: <strong id="scoreDisplay">0</strong>
   </div>
+  <div style="text-align:center" id="loadingMsg"></div>
 
 <script>
 // ---------- CONFIG ----------
@@ -156,9 +159,10 @@ function handleInput(input){
   }
 }
 
-// ---------- Audio file upload (auto load matching beats JSON) ----------
+// ---------- Audio file upload ----------
 const audioInput = document.getElementById("audioUpload");
 const startBtn = document.getElementById("startBtn");
+const loadingMsg = document.getElementById("loadingMsg");
 
 audioInput.addEventListener("change", async (e) => {
   const f = e.target.files[0];
@@ -167,7 +171,8 @@ audioInput.addEventListener("change", async (e) => {
   const arrayBuffer = await f.arrayBuffer();
   audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-  alert(`Audio loaded: ${f.name}. Waiting for matching beats JSON...`);
+  startBtn.disabled = true;
+  loadingMsg.textContent = "Waiting for beats JSON...";
 
   const jsonPath = `beats/${f.name.replace(/\.[^/.]+$/, "")}_beats.json`;
 
@@ -180,16 +185,18 @@ audioInput.addEventListener("change", async (e) => {
           scheduledBeats = data.notes.slice().sort((a,b) => a.time - b.time);
           tempoFromJSON = data.tempo;
           document.getElementById("tempoDisplay").innerText = Math.round(tempoFromJSON);
-          alert(`Beats loaded for ${f.name}!`);
+          loadingMsg.textContent = "";
+          startBtn.disabled = false;
           return;
         }
-      } catch{}
+      } catch {}
       await new Promise(r => setTimeout(r, 500));
     }
+    loadingMsg.textContent = "Failed to load beats JSON.";
     alert("Failed to load beats JSON. Make sure the Python watcher processed the file.");
   };
 
-  waitForJSON();
+  await waitForJSON();
 });
 
 // ---------- Start game ----------
@@ -226,4 +233,6 @@ window.addEventListener('keydown', (e) => {
     document.getElementById("scoreDisplay").innerText = 0;
   }
 });
-</script
+</script>
+</body>
+</html>
