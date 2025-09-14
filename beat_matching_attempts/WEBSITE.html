@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Beat-synced Micro:bit Rhythm Game</title>
+  <title>Beat Rush</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
   <style>
     body { font-family: Inter, Arial, sans-serif; background:#111; color:#eee; margin:0; padding:12px; }
@@ -91,7 +91,7 @@ function draw(){
     // advance y based on speed and deltaTime
     n.y += n.speed * (deltaTime / 1000);
     noStroke();
-    fill(n.type === "left" ? "#39a7ff" : "#7dff9a");
+    fill(n.type === "left" ? "#39a7ff" : "#ad7dff");
     ellipse(n.x, n.y, 36, 36);
 
     // Remove if far past canvas
