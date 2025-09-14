@@ -25,11 +25,6 @@
       <input type="file" id="audioUpload" accept="audio/*">
     </label>
 
-    <label>
-      beats.json:
-      <input type="file" id="beatsUpload" accept=".json,application/json">
-    </label>
-
     <button id="startBtn">Start Playback & Game</button>
   </div>
 
@@ -43,16 +38,15 @@
 const CANVAS_W = 780, CANVAS_H = 420;
 const HIT_LINE_Y = 350;
 const START_Y = -40;
-const NOTE_TRAVEL_TIME = 1.8;  // seconds for a note to fall to the hit line
-const HIT_WINDOW = 0.20;       // seconds allowed (+/-) for a hit
+const NOTE_TRAVEL_TIME = 1.8;
+const HIT_WINDOW = 0.20;
 
 // ---------- STATE ----------
-let scheduledBeats = [];   // array of {time: seconds, type: "left"|"right"}
+let scheduledBeats = [];
 let beatIndex = 0;
-let activeNotes = [];      // {x, y, type, beatTime, spawnTime, speed, img}
+let activeNotes = [];
 let score = 0;
 
-// Web Audio
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let audioBuffer = null;
 let bufferSource = null;
@@ -60,25 +54,18 @@ let audioStarted = false;
 let audioStartTime = 0;
 let tempoFromJSON = null;
 
-// Serial (micro:bit)
 let port = null, reader = null;
 
 // ---------- NOTE IMAGES ----------
-let whiteNotes = [];
-let purpleNotes = [];
+let whiteNotes = [], purpleNotes = [];
 
 function preload() {
-  try {
-    whiteNotes.push(loadImage('note_pngs/Note_white1.png', () => console.log('White1 loaded')));
-    whiteNotes.push(loadImage('note_pngs/Note_white2.png', () => console.log('White2 loaded')));
-    whiteNotes.push(loadImage('note_pngs/Note_white3.png', () => console.log('White3 loaded')));
-
-    purpleNotes.push(loadImage('note_pngs/Note_purple1.png', () => console.log('Purple1 loaded')));
-    purpleNotes.push(loadImage('note_pngs/Note_purple2.png', () => console.log('Purple2 loaded')));
-    purpleNotes.push(loadImage('note_pngs/Note_purple3.png', () => console.log('Purple3 loaded')));
-  } catch(err) {
-    console.error('Image load failed:', err);
-  }
+  whiteNotes.push(loadImage('note_pngs/Note_white1.png'));
+  whiteNotes.push(loadImage('note_pngs/Note_white2.png'));
+  whiteNotes.push(loadImage('note_pngs/Note_white3.png'));
+  purpleNotes.push(loadImage('note_pngs/Note_purple1.png'));
+  purpleNotes.push(loadImage('note_pngs/Note_purple2.png'));
+  purpleNotes.push(loadImage('note_pngs/Note_purple3.png'));
 }
 
 // ---------- p5.js ----------
@@ -90,7 +77,6 @@ function setup(){
 function draw(){
   background(18);
 
-  // Spawn notes
   if (audioStarted && scheduledBeats.length > 0){
     const now = audioCtx.currentTime - audioStartTime;
     while (beatIndex < scheduledBeats.length && now >= (scheduledBeats[beatIndex].time - NOTE_TRAVEL_TIME)){
@@ -98,8 +84,6 @@ function draw(){
       const x = beat.type === "left" ? random(130, 270) : random(510, 650);
       const spawnTime = beat.time - NOTE_TRAVEL_TIME;
       const speed = (HIT_LINE_Y - START_Y) / NOTE_TRAVEL_TIME;
-
-      // Pick a random image for the side
       const img = beat.type === "left" ? random(whiteNotes) : random(purpleNotes);
 
       activeNotes.push({ x, y: START_Y, type: beat.type, beatTime: beat.time, spawnTime, speed, img });
@@ -107,23 +91,19 @@ function draw(){
     }
   }
 
-  // Move and draw notes
   for (let i = activeNotes.length - 1; i >= 0; i--){
     const n = activeNotes[i];
     n.y += n.speed * (deltaTime / 1000);
-    
     imageMode(CENTER);
-    image(n.img, n.x, n.y, 36, 36); // size adjustable
+    image(n.img, n.x, n.y, 36, 36);
 
     if (n.y > height + 80) activeNotes.splice(i, 1);
   }
 
-  // Draw hit line
   stroke(255, 60, 60);
   strokeWeight(3);
   line(0, HIT_LINE_Y, width, HIT_LINE_Y);
 
-  // HUD
   noStroke();
   fill(230);
   textAlign(LEFT, TOP);
@@ -143,7 +123,7 @@ document.getElementById("connectBtn").addEventListener("click", async () => {
     alert("Connected to micro:bit (USB). Press A/B to play.");
   } catch (err) {
     console.error("Serial error:", err);
-    alert("Serial connect failed: " + (err && err.message ? err.message : err));
+    alert("Serial connect failed: " + (err?.message || err));
   }
 });
 
@@ -155,28 +135,20 @@ async function readLoop(){
       if (!value) continue;
       handleInput(value.trim());
     }
-  } catch (err) {
-    console.error("Serial readLoop error", err);
-  }
+  } catch (err) { console.error("Serial readLoop error", err); }
 }
 
 function handleInput(input){
   if (!audioStarted) return;
-
   const now = audioCtx.currentTime - audioStartTime;
-  let bestIndex = -1;
-  let bestDt = Infinity;
+  let bestIndex = -1, bestDt = Infinity;
   for (let i = 0; i < activeNotes.length; i++){
     const n = activeNotes[i];
     if ((input === "A" && n.type === "left") || (input === "B" && n.type === "right")){
       const dt = Math.abs(n.beatTime - now);
-      if (dt < bestDt){
-        bestDt = dt;
-        bestIndex = i;
-      }
+      if (dt < bestDt){ bestDt = dt; bestIndex = i; }
     }
   }
-
   if (bestIndex !== -1 && bestDt <= HIT_WINDOW){
     score += Math.round((HIT_WINDOW - bestDt) / HIT_WINDOW * 100) + 50;
     activeNotes.splice(bestIndex, 1);
@@ -184,46 +156,49 @@ function handleInput(input){
   }
 }
 
-// ---------- File uploads ----------
+// ---------- Audio file upload (auto load matching beats JSON) ----------
 const audioInput = document.getElementById("audioUpload");
-const beatsInput = document.getElementById("beatsUpload");
 const startBtn = document.getElementById("startBtn");
 
 audioInput.addEventListener("change", async (e) => {
   const f = e.target.files[0];
   if (!f) return;
+
   const arrayBuffer = await f.arrayBuffer();
   audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-  alert("Audio loaded (" + f.name + "). Now load beats.json and press Start.");
+
+  alert(`Audio loaded: ${f.name}. Waiting for matching beats JSON...`);
+
+  const jsonPath = `beats/${f.name.replace(/\.[^/.]+$/, "")}_beats.json`;
+
+  const waitForJSON = async () => {
+    for (let i = 0; i < 20; i++) {
+      try {
+        const res = await fetch(jsonPath);
+        if (res.ok){
+          const data = await res.json();
+          scheduledBeats = data.notes.slice().sort((a,b) => a.time - b.time);
+          tempoFromJSON = data.tempo;
+          document.getElementById("tempoDisplay").innerText = Math.round(tempoFromJSON);
+          alert(`Beats loaded for ${f.name}!`);
+          return;
+        }
+      } catch{}
+      await new Promise(r => setTimeout(r, 500));
+    }
+    alert("Failed to load beats JSON. Make sure the Python watcher processed the file.");
+  };
+
+  waitForJSON();
 });
 
-beatsInput.addEventListener("change", async (e) => {
-  const f = e.target.files[0];
-  if (!f) return;
-  try {
-    const text = await f.text();
-    const data = JSON.parse(text);
-    if (!data.notes || !Array.isArray(data.notes)) throw new Error("beats.json missing notes array");
-    scheduledBeats = data.notes.slice().sort((a,b) => a.time - b.time);
-    beatIndex = 0;
-    tempoFromJSON = data.tempo || null;
-    document.getElementById("tempoDisplay").innerText = tempoFromJSON ? Math.round(tempoFromJSON) : "—";
-    alert(`Loaded beats.json with ${scheduledBeats.length} beats.`);
-  } catch (err) {
-    console.error("Failed to parse beats.json", err);
-    alert("Error parsing beats.json: " + err.message);
-  }
-});
-
+// ---------- Start game ----------
 startBtn.addEventListener("click", async () => {
   if (!audioBuffer) { alert("Please upload an audio file first."); return; }
-  if (!scheduledBeats || scheduledBeats.length === 0) { alert("Please upload a beats.json."); return; }
+  if (!scheduledBeats || scheduledBeats.length === 0) { alert("Beats not loaded yet."); return; }
 
   await audioCtx.resume();
-  if (bufferSource) {
-    try { bufferSource.stop(); } catch(e) {}
-    bufferSource.disconnect();
-  }
+  if (bufferSource) { try { bufferSource.stop(); } catch(e){} bufferSource.disconnect(); }
 
   bufferSource = audioCtx.createBufferSource();
   bufferSource.buffer = audioBuffer;
@@ -240,9 +215,9 @@ startBtn.addEventListener("click", async () => {
 
 // ---------- Debug hotkeys ----------
 window.addEventListener('keydown', (e) => {
-  if (e.key === '1') handleInput('A'); 
-  if (e.key === '2') handleInput('B'); 
-  if (e.key === 'r') {
+  if (e.key === '1') handleInput('A');
+  if (e.key === '2') handleInput('B');
+  if (e.key === 'r'){
     if (bufferSource) try { bufferSource.stop(); } catch(e) {}
     audioStarted = false;
     beatIndex = 0;
@@ -251,6 +226,4 @@ window.addEventListener('keydown', (e) => {
     document.getElementById("scoreDisplay").innerText = 0;
   }
 });
-</script>
-</body>
-</html>
+</script
