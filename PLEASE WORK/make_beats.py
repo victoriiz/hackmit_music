@@ -1,39 +1,40 @@
-import sys
-import json
-import random
 import librosa
+import json
+import numpy as np
+import sys
+import os
 
-def process_audio(audio_path, json_path="beats.json"):
-    print(f"Loading {audio_path} ...")
-    # Load audio (mono, default 22050 Hz)
-    y, sr = librosa.load(audio_path, sr=None)
+def process_audio(filename, out_file="beats.json"):
+    print(f"Loading {filename} ...")
+    y, sr = librosa.load(filename)
 
-    # Get tempo + beat frames
-    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr, units="frames")
+    # Beat tracking
+    tempo, beat_frames = librosa.beat.beat_track(y=y, sr=sr)
+
+    # Ensure tempo is a float (librosa can return ndarray sometimes)
+    tempo = float(np.atleast_1d(tempo)[0])
+
+    # Convert beat frames to times
     beat_times = librosa.frames_to_time(beat_frames, sr=sr)
 
     print(f"Estimated tempo: {tempo:.2f} BPM, {len(beat_times)} beats found")
 
-    # Randomly assign left/right beats
-    notes = []
-    for t in beat_times:
-        notes.append({
-            "time": float(round(t, 3)),  # keep 3 decimals
-            "type": random.choice(["left", "right"])
-        })
+    # Alternate "left" and "right" for the notes
+    beats_data = [
+        {"time": float(bt), "side": "left" if i % 2 == 0 else "right"}
+        for i, bt in enumerate(beat_times)
+    ]
 
-    data = {"tempo": float(tempo), "notes": notes}
+    with open(out_file, "w") as f:
+        json.dump(beats_data, f, indent=2)
 
-    with open(json_path, "w") as f:
-        json.dump(data, f, indent=2)
-
-    print(f"Saved {json_path} with {len(notes)} beats.")
+    print(f"Saved {out_file} with {len(beats_data)} beats.")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python make_beats.py input_audio.mp3 [output.json]")
+        print("Usage: python make_beats.py <audiofile>")
         sys.exit(1)
 
     audio_file = sys.argv[1]
-    out_file = sys.argv[2] if len(sys.argv) > 2 else "beats.json"
+    out_file = "beats.json"
     process_audio(audio_file, out_file)
