@@ -13,8 +13,8 @@ const geistMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Suno x HackMIT",
-  description: "Sample Suno demo web app for HackMIT 2025",
+  title: "Beat Rush",
+  description: "Beat Rush: Create a custom AI soundtrack and play a rhythm game with your creation! (Used Suno AI)",
 };
 
 export default function RootLayout({

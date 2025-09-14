@@ -293,11 +293,14 @@ export default function MusicGenerator() {
               <Music className="w-8 h-8" />
               <Sparkles className="w-6 h-6" />
             </div>
-            <h1 className="text-4xl font-bold text-balance bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              AI Music Generator
+            <h1 className="text-4xl font-bold text-balance bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
+              Beat Rush
             </h1>
             <p className="text-lg text-muted-foreground text-pretty">
-              Transform your ideas into beautiful music with the power of AI!
+              Welcome to <span className="font-semibold text-orange-600">Beat Rush</span>!<br />
+              1. <b>Prompt</b> for a custom AI-generated soundtrack.<br />
+              2. <b>Generate</b> your unique song.<br />
+              3. <b>Play</b> a rhythm game using your new music!
             </p>
           </div>
 
@@ -311,14 +314,14 @@ export default function MusicGenerator() {
                     htmlFor="prompt"
                     className="text-md font-medium text-foreground"
                   >
-                    Describe your song!
+                    Step 1: What kind of soundtrack do you want?
                   </label>
                   <Textarea
                     id="prompt"
-                    placeholder="An upbeat pop song about summer adventures with electric guitar and synths..."
+                    placeholder="e.g. An energetic electronic beat for a racing game, or a chill lo-fi track for studying..."
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    className="min-h-[120px] resize-none text-base mt-4 border border-red-200 rounded-lg p-4"
+                    className="min-h-[120px] resize-none text-base mt-4 border border-orange-200 rounded-lg p-4"
                     disabled={isGenerating}
                   />
                 </div>
@@ -328,19 +331,18 @@ export default function MusicGenerator() {
                     htmlFor="tags"
                     className="text-md font-medium text-foreground"
                   >
-                    Style tags (optional)
+                    Step 2: Add style tags (optional)
                   </label>
                   <Textarea
                     id="tags"
-                    placeholder="pop, electronic, guitar, upbeat..."
+                    placeholder="e.g. pop, electronic, guitar, upbeat, retro..."
                     value={tags}
                     onChange={(e) => setTags(e.target.value)}
-                    className="min-h-[80px] resize-none text-base mt-2 border border-red-200 rounded-lg p-4"
+                    className="min-h-[80px] resize-none text-base mt-2 border border-orange-200 rounded-lg p-4"
                     disabled={isGenerating}
                   />
                   <p className="text-sm text-muted-foreground">
-                    Specify genres, instruments, and moods (e.g., "rock,
-                    electric guitar, energetic")
+                    Add genres, instruments, or moods to shape your song (e.g., "rock, electric guitar, energetic").
                   </p>
                 </div>
               </div>
@@ -350,17 +352,17 @@ export default function MusicGenerator() {
                 onClick={handleGenerate}
                 disabled={!prompt.trim() || isGenerating}
                 size="lg"
-                className="w-full h-12 text-base font-semibold btn-primary-darker-hover"
+                className="w-full h-12 text-base font-semibold btn-primary-darker-hover bg-gradient-to-r from-orange-400 to-red-400 text-white"
               >
                 {isGenerating ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
-                    Generating Music...
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                    Generating Soundtrack...
                   </>
                 ) : (
                   <>
                     <Music className="w-5 h-5 mr-2" />
-                    Generate Song
+                    Generate Soundtrack
                   </>
                 )}
               </Button>
@@ -678,10 +680,10 @@ export default function MusicGenerator() {
                                     onClick={() => setShowGameForClip(clip.id)}
                                     variant="outline"
                                     size="sm"
-                                    className="flex-1"
+                                    className="flex-1 bg-gradient-to-r from-orange-200 to-red-200 border-orange-400 text-orange-900 hover:from-orange-300 hover:to-red-300"
                                   >
                                     <Gamepad2 className="w-4 h-4 mr-2" />
-                                    Play Rhythm Game
+                                    Step 3: Play Rhythm Game
                                   </Button>
                                 )}
                               </div>
@@ -711,7 +713,7 @@ export default function MusicGenerator() {
 
           {/* Footer */}
           <p className="text-sm text-muted-foreground">
-            Powered by{" "}
+            <span className="font-semibold text-orange-600">Beat Rush</span> &mdash; Powered by{' '}
             <a
               href="https://suno.com"
               target="_blank"
@@ -719,8 +721,8 @@ export default function MusicGenerator() {
               className="underline hover:text-primary"
             >
               Suno API
-            </a>{" "}
-            • Create any song, any time!
+            </a>
+            . Prompt, generate, and play your own rhythm game!
           </p>
         </div>
       </div>
