@@ -1,1 +1,1 @@
-Submitted as part of HackMIT 2025. Created BeatRush, a live rhythm game played on a micro::bit controller, and displayed on an HTML site. Integrated with SUNO API, users can generate their own musical tracks through text prompts on a web server, which can then be transformed into a rhythm map which players can play.
+
